@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  ip-dashboard:
+    build: .
+    container_name: ip-dashboard
+    ports:
+      - "3001:3001"
+    volumes:
+      - ip-dashboard-data:/data
+    restart: unless-stopped
+
+volumes:
+  ip-dashboard-data:

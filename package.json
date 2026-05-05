@@ -1,0 +1,35 @@
+{
+  "name": "ip-dashboard",
+  "version": "1.0.0",
+  "description": "IP Address Monitoring Dashboard",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "nodemon server/index.js",
+    "dev:client": "vite",
+    "build": "vite build",
+    "start": "node server/index.js"
+  },
+  "keywords": ["ip", "monitoring", "dashboard"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "sqlite3": "^5.1.6",
+    "ping": "^0.4.4",
+    "body-parser": "^1.20.2"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.0",
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.0.2",
+    "tailwindcss": "^3.4.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32"
+  }
+}
