@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { initDB } from './database.js';
 import ipRoutes from './routes/ips.js';
+import scanRoutes from './routes/scan.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,6 +19,7 @@ app.use(bodyParser.json());
 initDB();
 
 app.use('/api/ips', ipRoutes);
+app.use('/api/scan', scanRoutes);
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../dist')));
