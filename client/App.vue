@@ -24,13 +24,16 @@
 
     <main class="max-w-7xl mx-auto px-4 py-8">
       <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-8">
-        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+        <h2 class="text-lg font-semibold mb-2 flex items-center gap-2">
           <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
           </svg>
           Auto IP Search & Bulk Scan
         </h2>
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <p class="text-sm text-gray-400 mb-4">
+          <span class="text-yellow-400">⚠️</span> Auto-detect may not always be accurate with multiple adapters. Verify the range before scanning!
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div class="md:col-span-2">
             <label class="block text-sm font-medium text-gray-300 mb-1">IP Range (CIDR or Start-End)</label>
             <input
@@ -48,6 +51,18 @@
               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-primary-500"
               placeholder="1-1000"
             >
+          </div>
+          <div class="flex items-end">
+            <button
+              @click="autoDetectRange"
+              :disabled="isScanning"
+              class="w-full bg-gray-600 hover:bg-gray-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+              </svg>
+              Auto-Detect
+            </button>
           </div>
           <div class="flex items-end">
             <button
@@ -286,6 +301,16 @@ const offlineCount = computed(() => ips.value.filter(ip => ip.last_status === 'd
 async function fetchIPs() {
   const res = await fetch('/api/ips')
   ips.value = await res.json()
+}
+
+async function autoDetectRange() {
+  try {
+    const res = await fetch('/api/scan/local')
+    const data = await res.json()
+    scanConfig.value.range = data.network
+  } catch (error) {
+    console.error('Failed to auto-detect network:', error)
+  }
 }
 
 async function startBulkScan() {

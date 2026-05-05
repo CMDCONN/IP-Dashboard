@@ -1,9 +1,80 @@
 import express from 'express';
 import net from 'net';
+import dns from 'dns';
+import os from 'os';
 import ping from 'ping';
 import { getDB } from '../database.js';
+import { promisify } from 'util';
 
 const router = express.Router();
+
+function isPrivateIP(ip) {
+  const parts = ip.split('.').map(Number);
+  if (parts[0] === 10) return true;
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  if (parts[0] === 192 && parts[1] === 168) return true;
+  return false;
+}
+
+function isLikelyVPNOrVirtual(adapterName) {
+  const keywords = [
+    'vpn', 'openvpn', 'tailscale', 'zerotier', 'wireguard', 'tap-windows',
+    'virtual', 'vmware', 'virtualbox', 'hyper-v', 'vethernet', 'pseudo',
+    'loopback', 'tunnel', 'ppp', 'wan miniport'
+  ];
+  const lowerName = adapterName.toLowerCase();
+  return keywords.some(keyword => lowerName.includes(keyword));
+}
+
+function isPhysicalAdapterName(adapterName) {
+  const physicalKeywords = [
+    'wi-fi', 'wifi', 'wireless', 'ethernet', 'lan', 'local area', 'network adapter'
+  ];
+  const lowerName = adapterName.toLowerCase();
+  return physicalKeywords.some(keyword => lowerName.includes(keyword));
+}
+
+function getLocalNetwork() {
+  const interfaces = os.networkInterfaces();
+  let physicalCandidates = [];
+  let otherCandidates = [];
+  
+  for (const name of Object.keys(interfaces)) {
+    if (isLikelyVPNOrVirtual(name)) continue;
+    
+    for (const iface of interfaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal && isPrivateIP(iface.address)) {
+        const ipParts = iface.address.split('.');
+        const network = `${ipParts[0]}.${ipParts[1]}.${ipParts[2]}.0/24`;
+        const candidate = { 
+          name, 
+          ip: iface.address, 
+          network, 
+          isPhysical: isPhysicalAdapterName(name) 
+        };
+        
+        if (candidate.isPhysical) {
+          physicalCandidates.push(candidate);
+        } else {
+          otherCandidates.push(candidate);
+        }
+      }
+    }
+  }
+  
+  const allCandidates = [...physicalCandidates, ...otherCandidates];
+  
+  if (allCandidates.length > 0) {
+    return { ip: allCandidates[0].ip, network: allCandidates[0].network };
+  }
+  
+  return { ip: '127.0.0.1', network: '192.168.1.0/24' };
+}
+
+router.get('/local', (req, res) => {
+  const network = getLocalNetwork();
+  res.json(network);
+});
 
 function ipToLong(ip) {
   return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
@@ -97,6 +168,17 @@ async function scanPorts(ip, portRange) {
   }
   
   return openPorts;
+}
+
+const reverseDns = promisify(dns.reverse);
+
+async function getHostname(ip) {
+  try {
+    const hostnames = await reverseDns(ip);
+    return hostnames[0] || '';
+  } catch (error) {
+    return '';
+  }
 }
 
 async function pingIP(ip) {
@@ -194,7 +276,11 @@ router.post('/', async (req, res) => {
       currentIP: ip
     }) + '\n');
     
-    const openPorts = await scanPorts(ip, portRange);
+    const [hostname, openPorts] = await Promise.all([
+      getHostname(ip),
+      scanPorts(ip, portRange)
+    ]);
+    
     const notes = openPorts.length > 0 
       ? `Open ports: ${openPorts.join(', ')}` 
       : '';
@@ -210,7 +296,7 @@ router.post('/', async (req, res) => {
           `INSERT INTO ip_addresses 
            (ip, name, description, watch_interval, is_watching, last_status, last_check) 
            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-          [ip, '', notes, 60, 1, 'up'],
+          [ip, hostname, notes, 60, 1, 'up'],
           function(err) {
             if (err) {
               console.error(err);
@@ -220,9 +306,9 @@ router.post('/', async (req, res) => {
       } else {
         db.run(
           `UPDATE ip_addresses 
-           SET description = ?, last_status = ?, last_check = CURRENT_TIMESTAMP 
+           SET name = ?, description = ?, last_status = ?, last_check = CURRENT_TIMESTAMP 
            WHERE id = ?`,
-          [notes, 'up', existing.id],
+          [existing.name || hostname, notes, 'up', existing.id],
           function(err) {
             if (err) {
               console.error(err);
